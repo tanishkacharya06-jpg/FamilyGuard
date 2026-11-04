@@ -37,6 +37,32 @@ jobs:
           test -f FamilyGuard/settings.gradle.kts
           test -f FamilyGuard/app/build.gradle.kts
 
+      - name: Patch recursive Kotlin setup function
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          source = Path("FamilyGuard/app/src/main/java/com/family/guard/AdminActivity.kt")
+          text = source.read_text()
+          old = '''    private fun setup() = Ui.passDialog(this, "Create admin passcode (min 4 characters)", {
+                  if (it.length >= 4) { Store.setAdminPass(this, it); show() }
+                  else { Ui.toast(this, "Too short"); setup() }
+              }, { finish() })
+          '''
+          new = '''    private fun setup(): Unit {
+                  Ui.passDialog(this, "Create admin passcode (min 4 characters)", {
+                      if (it.length >= 4) { Store.setAdminPass(this, it); show() }
+                      else { Ui.toast(this, "Too short"); setup() }
+                  }, { finish() })
+              }
+          '''
+          if old not in text:
+              raise SystemExit("Expected setup() function was not found; stopping rather than silently editing the wrong code.")
+          source.write_text(text.replace(old, new, 1))
+          PY
+          grep -n -A5 'private fun setup' FamilyGuard/app/src/main/java/com/family/guard/AdminActivity.kt
+
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
